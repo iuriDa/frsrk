@@ -2,8 +2,14 @@
 <!--
   ============================================================================
   © Данильченко Юрий Леонидович, 21.07.1988
-  ФРСРК — Форма заявки на соревнования (v2)
-  Логика: реестр клуба → выбор по дисциплинам → команды в одной возр. группе
+  ФРСРК — Форма заявки (v4)
+  Изменения:
+    - Фикс критического бага потери фокуса при печати
+    - Targeted DOM updates: перерисовываем только то, что реально изменилось
+    - Подсветка полей с ошибками валидации
+    - Кнопка submit блокируется во время запроса
+    - Автофокус на новое поле при добавлении спортсмена
+    - Очистка формы после успешной отправки + кнопка «Начать заново»
   ============================================================================
 -->
 <html lang="ru">
@@ -19,6 +25,9 @@
     --red:#f04438; --red-bg:#fff1f3;
     --amber:#f79009; --amber-bg:#fffaeb;
     --indigo-bg:#eef4ff;
+    --pink-bg:#fdf2f8;  --pink:#be185d;
+    --cyan-bg:#ecfeff;  --cyan:#0e7490;
+    --purple-bg:#f5f3ff;--purple:#6d28d9;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;background:var(--bg);color:var(--dark);line-height:1.5}
@@ -36,46 +45,50 @@
   .step-sub{font-size:13px;color:var(--muted);margin:0}
 
   label{font-size:13px;font-weight:600;color:#344054;display:block;margin:10px 0 5px}
-  input,select,textarea{width:100%;border:1px solid #d0d5dd;border-radius:10px;padding:10px 12px;font-size:15px;background:#fff;font-family:inherit}
+  input,select,textarea{width:100%;border:1px solid #d0d5dd;border-radius:10px;padding:10px 12px;font-size:15px;background:#fff;font-family:inherit;transition:border-color .15s,box-shadow .15s}
   input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(11,95,255,.12)}
+  input.has-error,select.has-error{border-color:var(--red);background:#fff7f7}
+  input.has-error:focus,select.has-error:focus{box-shadow:0 0 0 3px rgba(240,68,56,.15)}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .row-3{display:grid;grid-template-columns:1.5fr 1fr 80px;gap:10px}
 
-  .btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px;transition:transform .05s,filter .15s}
+  .btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px;transition:transform .05s,filter .15s,opacity .15s}
   .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
   .btn-primary{background:var(--blue);color:#fff}
-  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
   .btn-light{background:var(--indigo-bg);color:var(--blue)}
   .btn-danger{background:var(--red-bg);color:#c01048}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
   .btn-icon{padding:6px 10px;font-size:13px}
   .btn-block{width:100%}
 
   .roster{margin-top:6px}
-  .athlete-row{display:grid;grid-template-columns:2fr 1fr 70px 30px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+  .athlete-row{display:grid;grid-template-columns:2fr 1fr 70px 90px 26px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
   .athlete-row:last-child{border-bottom:0}
-  .athlete-row .pill{font-size:11px;padding:3px 8px}
+  .athlete-row input,.athlete-row select{padding:8px 10px;font-size:14px}
   .athlete-row .x{background:transparent;border:0;color:var(--red);cursor:pointer;font-size:18px;padding:0}
-  .athlete-row input{padding:8px 10px;font-size:14px}
   .roster-empty{padding:16px;text-align:center;color:var(--muted);font-size:14px;background:#fafbfc;border-radius:10px}
 
-  .pill{display:inline-flex;align-items:center;background:var(--indigo-bg);color:var(--blue);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;line-height:1}
+  .pill{display:inline-flex;align-items:center;background:var(--indigo-bg);color:var(--blue);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;line-height:1;white-space:nowrap}
   .pill.ok{background:var(--green-bg);color:#027a48}
   .pill.warn{background:var(--amber-bg);color:#b54708}
   .pill.err{background:var(--red-bg);color:#b42318}
   .pill.muted{background:#f2f4f7;color:#667085}
+  .pill.male{background:var(--cyan-bg);color:var(--cyan)}
+  .pill.female{background:var(--pink-bg);color:var(--pink)}
+  .pill.mixed{background:var(--purple-bg);color:var(--purple)}
 
   .discipline-block{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:#fcfcfd}
   .discipline-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .discipline-name{font-weight:700;font-size:15px;color:var(--dark)}
   .discipline-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .discipline-pills{display:flex;gap:6px;flex-wrap:wrap}
 
   .athlete-checkbox{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-top:6px;background:#fff;cursor:pointer;transition:background .1s,border-color .1s}
   .athlete-checkbox:hover{border-color:var(--blue)}
-  .athlete-checkbox.disabled{opacity:.45;cursor:not-allowed;background:#f9fafb}
-  .athlete-checkbox.disabled:hover{border-color:var(--line)}
   .athlete-checkbox input[type="checkbox"]{width:18px;height:18px;margin:0;flex:0 0 18px;accent-color:var(--blue)}
   .athlete-checkbox .ac-name{flex:1;font-size:14px;font-weight:500}
-  .athlete-checkbox .ac-meta{font-size:11px;color:var(--muted)}
+  .athlete-checkbox .ac-meta{display:flex;gap:4px}
 
   .team{border:1px solid #cdd5e1;border-radius:12px;padding:12px;background:#fff;margin-top:10px}
   .team-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
@@ -87,7 +100,7 @@
   .info.err{background:var(--red-bg);color:#912018;border:1px solid #fda4a4}
   .info.muted{background:#f2f4f7;color:#475467}
 
-  .preview{background:#0c111d;color:#e4e7ec;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.6;max-height:280px;overflow:auto}
+  .preview{background:#0c111d;color:#e4e7ec;border-radius:14px;padding:14px;margin-top:8px;font-size:13px;line-height:1.6;max-height:300px;overflow:auto}
   .preview-line{padding:6px 0;border-bottom:1px solid #1f242f}
   .preview-line:last-child{border-bottom:0}
   .preview-line b{color:#fff}
@@ -100,8 +113,12 @@
   .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
   .help{font-size:12px;color:var(--muted);margin-top:6px}
 
+  /* Спиннер на кнопке */
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
   @media (max-width:760px){
-    .row,.row-3{grid-template-columns:1fr}
+    .row{grid-template-columns:1fr}
     .athlete-row{grid-template-columns:1fr;gap:6px;padding:10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
     .athlete-row .x{justify-self:end}
     .hero h1{font-size:22px}
@@ -115,14 +132,14 @@
     <div class="brand">ФРСРК</div>
     <div class="hero">
       <h1>Заявка на соревнования</h1>
-      <p>Сначала добавьте всех спортсменов клуба, затем по каждой дисциплине отметьте участников. Команды формируются из спортсменов одной возрастной группы.</p>
+      <p>Сначала добавьте всех спортсменов клуба, затем по каждой дисциплине отметьте участников. Команды формируются из спортсменов одной возрастной группы и подходящего пола.</p>
     </div>
   </div>
 </header>
 
 <main class="wrap">
 
-  <!-- ========= ШАГ 1: О заявке ========= -->
+  <!-- ШАГ 1 -->
   <section class="step">
     <div class="step-head">
       <div class="step-num">1</div>
@@ -136,38 +153,26 @@
     <select id="eventName" required onchange="onEventChange()"></select>
 
     <div class="row">
-      <div>
-        <label>Клуб / коллектив</label>
-        <input id="clubName" required placeholder="Например: Точка Отрыва">
-      </div>
-      <div>
-        <label>Город</label>
-        <input id="city" required placeholder="Например: Симферополь">
-      </div>
+      <div><label>Клуб / коллектив</label><input id="clubName" required placeholder="Например: Точка Отрыва"></div>
+      <div><label>Город</label><input id="city" required placeholder="Например: Симферополь"></div>
     </div>
 
     <div class="row">
-      <div>
-        <label>Тренер (ФИО)</label>
-        <input id="coachName" required placeholder="ФИО тренера">
-      </div>
-      <div>
-        <label>Контакт тренера</label>
-        <input id="coachContact" required placeholder="+7… / @username">
-      </div>
+      <div><label>Тренер (ФИО)</label><input id="coachName" required placeholder="ФИО тренера"></div>
+      <div><label>Контакт тренера</label><input id="coachContact" required placeholder="+7… / @username"></div>
     </div>
 
     <label>Email для подтверждения</label>
     <input type="email" id="email" placeholder="example@mail.ru">
   </section>
 
-  <!-- ========= ШАГ 2: Реестр спортсменов ========= -->
+  <!-- ШАГ 2 -->
   <section class="step">
     <div class="step-head">
       <div class="step-num">2</div>
       <div>
         <div class="step-title">Спортсмены клуба</div>
-        <div class="step-sub">Все, кто едет на это соревнование. Возрастная группа считается автоматически по году события.</div>
+        <div class="step-sub">Все, кто едет на это соревнование. Укажите ФИО, дату рождения и пол.</div>
       </div>
     </div>
 
@@ -175,23 +180,23 @@
     <div class="actions">
       <button type="button" class="btn btn-light" onclick="addAthlete()">+ Добавить спортсмена</button>
     </div>
-    <div class="help">Если спортсмен не попадает ни в одну возрастную группу — он не сможет быть включён в дисциплины.</div>
+    <div class="help">Возрастная группа считается автоматически по году события.</div>
   </section>
 
-  <!-- ========= ШАГ 3: Дисциплины ========= -->
+  <!-- ШАГ 3 -->
   <section class="step">
     <div class="step-head">
       <div class="step-num">3</div>
       <div>
         <div class="step-title">Дисциплины и составы</div>
-        <div class="step-sub">Для каждой дисциплины отметьте, кто участвует. В групповых дисциплинах формируйте команды.</div>
+        <div class="step-sub">У каждой дисциплины свой гендерный режим (М / Ж / Микс). Состав фильтруется автоматически.</div>
       </div>
     </div>
 
     <div id="disciplinesArea"></div>
   </section>
 
-  <!-- ========= ШАГ 4: Предпросмотр и отправка ========= -->
+  <!-- ШАГ 4 -->
   <section class="step">
     <div class="step-head">
       <div class="step-num">4</div>
@@ -204,7 +209,8 @@
     <div id="preview" class="preview"></div>
 
     <div class="actions">
-      <button type="button" class="btn btn-primary btn-block" onclick="submitForm()">Отправить заявку</button>
+      <button type="button" id="submitBtn" class="btn btn-primary btn-block" onclick="submitForm()">Отправить заявку</button>
+      <button type="button" class="btn btn-ghost" onclick="resetForm(true)">Начать заново</button>
     </div>
 
     <div id="status" class="status"></div>
@@ -218,40 +224,61 @@
    ============================================================================ */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwO6sgtov2Yx6J_wejQ0-7KzCdKAe72nOaHNmle9JbAZ8-hpmIzno1tPhkJF3sT7XHq/exec';
 
-/* Дефолтные настройки (используются, если Apps Script недоступен) */
 let settings = {
   events: [
     { name:'Кубок Республики Крым по спортивной скакалке', date:'2026-06-15' }
   ],
   disciplines: [
-    { name:'Спринт 30 секунд',          type:'individual', min:1, max:1 },
-    { name:'Выносливость 180 секунд',   type:'individual', min:1, max:1 },
-    { name:'Вольные упражнения соло',   type:'individual', min:1, max:1 },
-    { name:'Вольные парные',            type:'group',      min:2, max:2 },
-    { name:'Вольные групповые',         type:'group',      min:3, max:4 },
-    { name:'Прыжки через 2 скакалки — 1 человек',  type:'group', min:3, max:3 },
-    { name:'Прыжки через 2 скакалки — 2 человека', type:'group', min:4, max:4 },
-    { name:'Командные соревнования',    type:'group',      min:4, max:12 }
+    { name:'Спринт 30 секунд',           type:'individual', gender:'M',     min:1, max:1 },
+    { name:'Спринт 30 секунд',           type:'individual', gender:'W',     min:1, max:1 },
+    { name:'Выносливость 180 секунд',    type:'individual', gender:'M',     min:1, max:1 },
+    { name:'Выносливость 180 секунд',    type:'individual', gender:'W',     min:1, max:1 },
+    { name:'Вольные упражнения соло',    type:'individual', gender:'M',     min:1, max:1 },
+    { name:'Вольные упражнения соло',    type:'individual', gender:'W',     min:1, max:1 },
+    { name:'Вольные парные',             type:'group',      gender:'M',     min:2, max:2 },
+    { name:'Вольные парные',             type:'group',      gender:'W',     min:2, max:2 },
+    { name:'Вольные парные',             type:'group',      gender:'Mixed', min:2, max:2 },
+    { name:'Прыжки через 2 скакалки — 1 человек',  type:'group', gender:'M',     min:3, max:3 },
+    { name:'Прыжки через 2 скакалки — 1 человек',  type:'group', gender:'W',     min:3, max:3 },
+    { name:'Прыжки через 2 скакалки — 1 человек',  type:'group', gender:'Mixed', min:3, max:3 },
+    { name:'Прыжки через 2 скакалки — 2 человека', type:'group', gender:'M',     min:4, max:4 },
+    { name:'Прыжки через 2 скакалки — 2 человека', type:'group', gender:'W',     min:4, max:4 },
+    { name:'Прыжки через 2 скакалки — 2 человека', type:'group', gender:'Mixed', min:4, max:4 }
   ],
   ageGroups: [
-    { name:'Дети 7-10',          from:7,  to:10 },
-    { name:'Юноши/девушки 11-14',from:11, to:14 },
-    { name:'Юниоры 15-17',       from:15, to:17 },
-    { name:'Взрослые 18-29',     from:18, to:29 },
-    { name:'Мастера 30+',        from:30, to:99 }
+    { name:'Дети 7-10',           from:7,  to:10 },
+    { name:'Юноши/девушки 11-14', from:11, to:14 },
+    { name:'Юниоры 15-17',        from:15, to:17 },
+    { name:'Взрослые 18-29',      from:18, to:29 },
+    { name:'Мастера 30+',         from:30, to:99 }
   ]
 };
 
-/* ============================================================================
-   СОСТОЯНИЕ
-   ============================================================================ */
+const genderLabel = (g) => g === 'M' ? 'Мужской' : g === 'W' ? 'Женский' : 'Микс';
+const genderShort = (g) => g === 'M' ? 'М'      : g === 'W' ? 'Ж'      : 'Микс';
+const genderClass = (g) => g === 'M' ? 'male'   : g === 'W' ? 'female' : 'mixed';
+
 const state = {
-  athletes: [],         // [{ id, name, birthDate, gender, ageGroupName, age }]
-  individual: {},       // { disciplineIdx: Set(athleteId) }  — кто выступает в личной дисциплине
-  groups: {}            // { disciplineIdx: [{ id, ageGroupName, name, athleteIds: Set }] }
+  athletes: [],
+  individual: {},
+  groups: {}
 };
 
 const uid = () => 'a' + Math.random().toString(36).slice(2,9);
+
+/* ============================================================================
+   ELIGIBILITY
+   ============================================================================ */
+function isEligible(athlete, discipline){
+  if (!athlete.gender || !athlete.ageGroupName) return false;
+  if (discipline.gender === 'Mixed') return true;
+  return athlete.gender === discipline.gender;
+}
+
+function isEligibleForTeam(athlete, discipline, ageGroupName){
+  if (!isEligible(athlete, discipline)) return false;
+  return athlete.ageGroupName === ageGroupName;
+}
 
 /* ============================================================================
    ИНИЦИАЛИЗАЦИЯ
@@ -269,9 +296,15 @@ async function loadSettings(){
   try{
     const res = await fetch(SCRIPT_URL + '?action=settings');
     const data = await res.json();
-    if (data.ok && data.settings) settings = data.settings;
+    if (data.ok && data.settings){
+      const s = data.settings;
+      if (Array.isArray(s.disciplines)){
+        s.disciplines.forEach(d => { if (!d.gender) d.gender = 'Mixed'; });
+      }
+      settings = s;
+    }
   }catch(e){
-    console.warn('Настройки из Apps Script не загружены, используются дефолтные', e);
+    console.warn('Настройки не загружены, используются дефолтные', e);
   }
 }
 
@@ -283,8 +316,10 @@ function renderEvents(){
 }
 
 function onEventChange(){
-  // При смене события пересчитываем возрастные группы и перерисовываем всё
+  // Меняется год события → пересчитать все возрастные группы → почистить невалидные выборы
   state.athletes.forEach(a => recalcAge(a));
+  cleanupIneligibleSelections();
+  // Тут уже допустимо renderRoster, потому что меняется СОБЫТИЕ (пользователь не печатает)
   renderRoster();
   renderDisciplines();
   renderPreview();
@@ -297,21 +332,26 @@ function getEventYear(){
 }
 
 /* ============================================================================
-   РЕЕСТР СПОРТСМЕНОВ
+   РЕЕСТР СПОРТСМЕНОВ — с targeted DOM updates
    ============================================================================ */
 function addAthlete(){
+  const id = uid();
   state.athletes.push({
-    id: uid(), name:'', birthDate:'', gender:'',
-    ageGroupName:null, age:null
+    id, name:'', birthDate:'', gender:'', ageGroupName:null, age:null
   });
   renderRoster();
   renderDisciplines();
   renderPreview();
+  // Автофокус на новое поле имени
+  requestAnimationFrame(() => {
+    const row = document.querySelector(`[data-athlete-row="${id}"]`);
+    const nameInput = row?.querySelector('[data-field="name"]');
+    nameInput?.focus();
+  });
 }
 
 function removeAthlete(id){
   state.athletes = state.athletes.filter(a => a.id !== id);
-  // Удаляем из всех выбранных мест
   Object.keys(state.individual).forEach(k => state.individual[k].delete(id));
   Object.values(state.groups).forEach(teams => teams.forEach(t => t.athleteIds.delete(id)));
   renderRoster();
@@ -319,22 +359,80 @@ function removeAthlete(id){
   renderPreview();
 }
 
+/**
+ * Главный фикс v4: НЕ перерисовываем весь реестр на каждый ввод.
+ * Только точечные обновления + лёгкий preview.
+ */
 function updateAthlete(id, field, value){
   const a = state.athletes.find(x => x.id === id);
   if (!a) return;
+
+  const oldAgeGroup = a.ageGroupName;
+  const oldGender   = a.gender;
+
   a[field] = value;
   if (field === 'birthDate') recalcAge(a);
-  // Если изменилась возр.группа — выкидываем спортсмена из команд другой группы
+
+  // Точечно обновляем пилюлю возраста в строке (без пересоздания input'ов!)
   if (field === 'birthDate'){
-    Object.values(state.groups).forEach(teams =>
-      teams.forEach(t => {
-        if (t.ageGroupName !== a.ageGroupName) t.athleteIds.delete(id);
-      })
-    );
+    updateAgePill(a);
   }
-  renderRoster();
-  renderDisciplines();
+
+  // Снимаем подсветку ошибки с поля, которое только что отредактировали
+  const row = document.querySelector(`[data-athlete-row="${id}"]`);
+  if (row){
+    row.querySelector(`[data-field="${field}"]`)?.classList.remove('has-error');
+  }
+
+  // Если изменилась eligibility — почистить выборы и перерисовать дисциплины
+  const ageGroupChanged = field === 'birthDate' && a.ageGroupName !== oldAgeGroup;
+  const genderChanged   = field === 'gender'    && a.gender       !== oldGender;
+  if (ageGroupChanged || genderChanged){
+    cleanupIneligibleSelections();
+    renderDisciplines();
+  }
+
+  // Preview легковесный, обновляется всегда
   renderPreview();
+}
+
+function updateAgePill(a){
+  const row = document.querySelector(`[data-athlete-row="${a.id}"]`);
+  if (!row) return;
+  const cell = row.querySelector('[data-cell="age-pill"]');
+  if (!cell) return;
+  cell.innerHTML = renderAgePillHTML(a);
+}
+
+function renderAgePillHTML(a){
+  if (a.ageGroupName){
+    return `<span class="pill ok" title="${esc(a.ageGroupName)}">${a.age} · ${esc(shortGroup(a.ageGroupName))}</span>`;
+  }
+  if (a.birthDate){
+    return `<span class="pill err" title="Не попадает ни в одну возрастную группу">${a.age||'?'} · нет гр.</span>`;
+  }
+  return `<span class="pill muted">—</span>`;
+}
+
+function cleanupIneligibleSelections(){
+  Object.keys(state.individual).forEach(idx => {
+    const d = settings.disciplines[idx];
+    if (!d) return;
+    [...state.individual[idx]].forEach(aid => {
+      const a = state.athletes.find(x => x.id === aid);
+      if (!a || !isEligible(a, d)) state.individual[idx].delete(aid);
+    });
+  });
+  Object.keys(state.groups).forEach(idx => {
+    const d = settings.disciplines[idx];
+    if (!d) return;
+    state.groups[idx].forEach(t => {
+      [...t.athleteIds].forEach(aid => {
+        const a = state.athletes.find(x => x.id === aid);
+        if (!a || !isEligibleForTeam(a, d, t.ageGroupName)) t.athleteIds.delete(aid);
+      });
+    });
+  });
 }
 
 function recalcAge(a){
@@ -352,25 +450,23 @@ function renderRoster(){
     return;
   }
   root.innerHTML = state.athletes.map(a => `
-    <div class="athlete-row">
-      <input value="${esc(a.name)}" placeholder="Фамилия Имя Отчество"
+    <div class="athlete-row" data-athlete-row="${a.id}">
+      <input data-field="name" value="${esc(a.name)}" placeholder="Фамилия Имя Отчество"
              oninput="updateAthlete('${a.id}','name',this.value)">
-      <input type="date" value="${esc(a.birthDate)}"
+      <input data-field="birthDate" type="date" value="${esc(a.birthDate)}"
              oninput="updateAthlete('${a.id}','birthDate',this.value)">
-      ${
-        a.ageGroupName
-          ? `<span class="pill ok" title="${esc(a.ageGroupName)}">${a.age} · ${esc(shortGroup(a.ageGroupName))}</span>`
-          : (a.birthDate
-              ? `<span class="pill err" title="Не попадает ни в одну возрастную группу">${a.age||'?'} · нет гр.</span>`
-              : `<span class="pill muted">—</span>`)
-      }
+      <select data-field="gender" onchange="updateAthlete('${a.id}','gender',this.value)">
+        <option value=""  ${!a.gender ? 'selected':''}>Пол</option>
+        <option value="M" ${a.gender==='M'?'selected':''}>М</option>
+        <option value="W" ${a.gender==='W'?'selected':''}>Ж</option>
+      </select>
+      <span data-cell="age-pill">${renderAgePillHTML(a)}</span>
       <button type="button" class="x" title="Удалить" onclick="removeAthlete('${a.id}')">×</button>
     </div>
   `).join('');
 }
 
 function shortGroup(name){
-  // 'Взрослые 18-29' → '18-29'
   const m = name.match(/(\d+[+\-]?\d*)/);
   return m ? m[1] : name;
 }
@@ -385,20 +481,22 @@ function renderDisciplines(){
   ).join('');
 }
 
-/* ---- ЛИЧНЫЕ ---- */
 function renderIndividual(d, idx){
   if (!state.individual[idx]) state.individual[idx] = new Set();
   const selected = state.individual[idx];
 
-  const eligible = state.athletes.filter(a => a.ageGroupName);
+  const eligible = state.athletes.filter(a => isEligible(a, d));
   const items = eligible.length === 0
-    ? `<div class="info muted">Сначала добавьте спортсменов в реестр (Шаг 2).</div>`
+    ? `<div class="info muted">Нет подходящих спортсменов в реестре (нужны: ${esc(genderLabel(d.gender))}, с указанной датой рождения).</div>`
     : eligible.map(a => `
         <label class="athlete-checkbox">
           <input type="checkbox" ${selected.has(a.id)?'checked':''}
                  onchange="toggleIndividual(${idx},'${a.id}',this.checked)">
           <span class="ac-name">${esc(a.name||'(без имени)')}</span>
-          <span class="ac-meta">${esc(a.ageGroupName)}</span>
+          <span class="ac-meta">
+            <span class="pill ${genderClass(a.gender)}">${esc(genderShort(a.gender))}</span>
+            <span class="pill muted">${esc(a.ageGroupName)}</span>
+          </span>
         </label>
       `).join('');
 
@@ -407,9 +505,12 @@ function renderIndividual(d, idx){
       <div class="discipline-head">
         <div>
           <div class="discipline-name">${esc(d.name)}</div>
-          <div class="discipline-meta">Личная дисциплина · выбрано: ${selected.size}</div>
+          <div class="discipline-meta">Личная · выбрано: ${selected.size} из ${eligible.length} подходящих</div>
         </div>
-        <span class="pill">личная</span>
+        <div class="discipline-pills">
+          <span class="pill">личная</span>
+          <span class="pill ${genderClass(d.gender)}">${esc(genderShort(d.gender))}</span>
+        </div>
       </div>
       ${items}
     </div>
@@ -420,7 +521,6 @@ function toggleIndividual(idx, athleteId, checked){
   if (!state.individual[idx]) state.individual[idx] = new Set();
   if (checked) state.individual[idx].add(athleteId);
   else state.individual[idx].delete(athleteId);
-  // Перерисовываем только счётчик и предпросмотр — не весь блок, чтобы не терять фокус
   updateIndividualMeta(idx);
   renderPreview();
 }
@@ -430,22 +530,22 @@ function updateIndividualMeta(idx){
   if (blocks[idx]){
     const meta = blocks[idx].querySelector('.discipline-meta');
     if (meta){
+      const d = settings.disciplines[idx];
+      const eligible = state.athletes.filter(a => isEligible(a, d));
       const n = state.individual[idx]?.size || 0;
-      meta.textContent = `Личная дисциплина · выбрано: ${n}`;
+      meta.textContent = `Личная · выбрано: ${n} из ${eligible.length} подходящих`;
     }
   }
 }
 
-/* ---- ГРУППОВЫЕ ---- */
 function renderGroup(d, idx){
   if (!state.groups[idx]) state.groups[idx] = [];
   const teams = state.groups[idx];
 
-  // Какие возрастные группы доступны? Те, в которых хотя бы 1 валидный спортсмен.
   const groupsWithAthletes = settings.ageGroups
     .map(g => ({
       name: g.name,
-      athletes: state.athletes.filter(a => a.ageGroupName === g.name)
+      athletes: state.athletes.filter(a => isEligibleForTeam(a, d, g.name))
     }))
     .filter(g => g.athletes.length > 0);
 
@@ -460,18 +560,21 @@ function renderGroup(d, idx){
       <div class="discipline-head">
         <div>
           <div class="discipline-name">${esc(d.name)}</div>
-          <div class="discipline-meta">Групповая · ${d.min === d.max ? d.min + ' уч.' : d.min+'–'+d.max+' уч.'} · команд: ${teams.length}</div>
+          <div class="discipline-meta">Группа · ${d.min === d.max ? d.min + ' уч.' : d.min+'–'+d.max+' уч.'} · команд: ${teams.length}</div>
         </div>
-        <span class="pill">группа</span>
+        <div class="discipline-pills">
+          <span class="pill">группа</span>
+          <span class="pill ${genderClass(d.gender)}">${esc(genderShort(d.gender))}</span>
+        </div>
       </div>
       ${teamsHtml}
       <div class="actions">
         <button type="button" class="btn btn-light"
-                onclick="addTeam(${idx})" ${canAdd?'':'disabled style="opacity:.5;cursor:not-allowed"'}>
+                onclick="addTeam(${idx})" ${canAdd?'':'disabled'}>
           + Добавить команду
         </button>
       </div>
-      ${!canAdd ? `<div class="help">Сначала добавьте спортсменов в Шаге 2.</div>` : ''}
+      ${!canAdd ? `<div class="help">Нет подходящих спортсменов (нужны: ${esc(genderLabel(d.gender))}). Добавьте в Шаге 2.</div>` : ''}
     </div>
   `;
 }
@@ -481,21 +584,22 @@ function renderTeam(d, idx, team, ti, groupsWithAthletes){
     `<option value="${esc(g.name)}" ${team.ageGroupName===g.name?'selected':''}>${esc(g.name)} (${g.athletes.length} чел.)</option>`
   ).join('');
 
-  // Список спортсменов: сначала те, кто из выбранной возр. группы, потом остальные (заблокированы)
-  const inGroup = state.athletes.filter(a => a.ageGroupName === team.ageGroupName);
+  const eligible = state.athletes.filter(a => isEligibleForTeam(a, d, team.ageGroupName));
 
-  const checkboxes = inGroup.length === 0
-    ? `<div class="info warn">В выбранной группе нет спортсменов в реестре.</div>`
-    : inGroup.map(a => `
+  const checkboxes = eligible.length === 0
+    ? `<div class="info warn">В выбранной группе нет подходящих спортсменов.</div>`
+    : eligible.map(a => `
         <label class="athlete-checkbox">
           <input type="checkbox" ${team.athleteIds.has(a.id)?'checked':''}
                  onchange="toggleTeamMember(${idx},${ti},'${a.id}',this.checked)">
           <span class="ac-name">${esc(a.name||'(без имени)')}</span>
-          <span class="ac-meta">${esc(a.ageGroupName)}</span>
+          <span class="ac-meta">
+            <span class="pill ${genderClass(a.gender)}">${esc(genderShort(a.gender))}</span>
+            <span class="pill muted">${esc(a.ageGroupName)}</span>
+          </span>
         </label>
       `).join('');
 
-  // Валидация количества
   const cnt = team.athleteIds.size;
   let validation = '';
   if (cnt < d.min) validation = `<span class="pill warn">Нужно ещё ${d.min - cnt}</span>`;
@@ -516,7 +620,7 @@ function renderTeam(d, idx, team, ti, groupsWithAthletes){
       <select onchange="setTeamGroup(${idx},${ti},this.value)">
         ${groupOptions}
       </select>
-      <div class="help">Все участники команды должны быть из выбранной возрастной группы.</div>
+      <div class="help">Все участники должны быть из одной возрастной группы и подходить по полу (${esc(genderLabel(d.gender))}).</div>
 
       <label>Название команды (необязательно)</label>
       <input value="${esc(team.name||'')}" placeholder="Например: Точка Отрыва DDC"
@@ -530,15 +634,12 @@ function renderTeam(d, idx, team, ti, groupsWithAthletes){
 
 function addTeam(idx){
   if (!state.groups[idx]) state.groups[idx] = [];
-  // Возьмём первую возрастную группу, в которой есть спортсмены
+  const d = settings.disciplines[idx];
   const firstGroup = settings.ageGroups
     .map(g => g.name)
-    .find(name => state.athletes.some(a => a.ageGroupName === name));
+    .find(name => state.athletes.some(a => isEligibleForTeam(a, d, name)));
   state.groups[idx].push({
-    id: uid(),
-    ageGroupName: firstGroup || null,
-    name: '',
-    athleteIds: new Set()
+    id: uid(), ageGroupName: firstGroup || null, name: '', athleteIds: new Set()
   });
   renderDisciplines();
   renderPreview();
@@ -552,16 +653,14 @@ function removeTeam(idx, ti){
 
 function setTeamGroup(idx, ti, value){
   const t = state.groups[idx][ti];
-  if (t.ageGroupName !== value){
-    // Возр. группа поменялась — очищаем состав
-    t.athleteIds = new Set();
-  }
+  if (t.ageGroupName !== value) t.athleteIds = new Set();
   t.ageGroupName = value;
   renderDisciplines();
   renderPreview();
 }
 
 function setTeamName(idx, ti, value){
+  // Targeted: меняем только state и preview, DOM команды не трогаем
   state.groups[idx][ti].name = value;
   renderPreview();
 }
@@ -570,7 +669,7 @@ function toggleTeamMember(idx, ti, athleteId, checked){
   const t = state.groups[idx][ti];
   if (checked) t.athleteIds.add(athleteId);
   else t.athleteIds.delete(athleteId);
-  renderDisciplines(); // перерисовываем чтобы пересчитать валидацию
+  renderDisciplines();
   renderPreview();
 }
 
@@ -587,7 +686,7 @@ function renderPreview(){
       sel.forEach(aid => {
         const a = state.athletes.find(x => x.id === aid);
         if (!a) return;
-        lines.push(`<div class="preview-line"><b>${esc(d.name)}</b> · ${esc(a.ageGroupName||'?')} · ${esc(a.name||'(без имени)')}</div>`);
+        lines.push(`<div class="preview-line"><b>${esc(d.name)}</b> · ${esc(genderShort(d.gender))} · ${esc(a.ageGroupName||'?')} · ${esc(a.name||'(без имени)')}</div>`);
       });
     } else {
       (state.groups[idx]||[]).forEach((t, ti) => {
@@ -600,7 +699,7 @@ function renderPreview(){
           ? `<span class="pill ok">✓</span>`
           : `<span class="pill err">не валидна</span>`;
         const teamLabel = t.name ? ` «${esc(t.name)}»` : '';
-        lines.push(`<div class="preview-line">${tag} <b>${esc(d.name)}</b>${teamLabel} · ${esc(t.ageGroupName||'?')} · [${cnt}/${d.min===d.max?d.min:d.min+'-'+d.max}] · ${esc(names||'нет состава')}</div>`);
+        lines.push(`<div class="preview-line">${tag} <b>${esc(d.name)}</b>${teamLabel} · ${esc(genderShort(d.gender))} · ${esc(t.ageGroupName||'?')} · [${cnt}/${d.min===d.max?d.min:d.min+'-'+d.max}] · ${esc(names||'нет состава')}</div>`);
       });
     }
   });
@@ -613,41 +712,73 @@ function renderPreview(){
 }
 
 /* ============================================================================
-   ОТПРАВКА
+   ВАЛИДАЦИЯ С ПОДСВЕТКОЙ ПОЛЕЙ
    ============================================================================ */
+function clearErrorHighlights(){
+  document.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
+}
+
+function highlightError(selector){
+  const el = document.querySelector(selector);
+  if (el) el.classList.add('has-error');
+}
+
 function validate(){
+  clearErrorHighlights();
   const errors = [];
 
-  if (!document.getElementById('eventName').value) errors.push('Не выбрано мероприятие.');
-  if (!document.getElementById('clubName').value.trim()) errors.push('Не указан клуб.');
-  if (!document.getElementById('city').value.trim()) errors.push('Не указан город.');
-  if (!document.getElementById('coachName').value.trim()) errors.push('Не указан тренер.');
-  if (!document.getElementById('coachContact').value.trim()) errors.push('Не указан контакт тренера.');
+  const requiredTopFields = [
+    ['eventName', 'Не выбрано мероприятие.'],
+    ['clubName',  'Не указан клуб.'],
+    ['city',      'Не указан город.'],
+    ['coachName', 'Не указан тренер.'],
+    ['coachContact', 'Не указан контакт тренера.']
+  ];
+  requiredTopFields.forEach(([id, msg]) => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()){
+      errors.push(msg);
+      el.classList.add('has-error');
+    }
+  });
 
   if (state.athletes.length === 0) errors.push('Не добавлено ни одного спортсмена.');
 
   state.athletes.forEach((a,i) => {
-    if (!a.name.trim())     errors.push(`Спортсмен #${i+1}: пустое ФИО.`);
-    if (!a.birthDate)       errors.push(`Спортсмен #${i+1}: не указана дата рождения.`);
-    else if (!a.ageGroupName) errors.push(`${a.name||'спортсмен #'+(i+1)}: возраст ${a.age} не попадает ни в одну группу.`);
+    const label = a.name || `спортсмен #${i+1}`;
+    const row = `[data-athlete-row="${a.id}"]`;
+
+    if (!a.name.trim()){
+      errors.push(`Спортсмен #${i+1}: пустое ФИО.`);
+      highlightError(`${row} [data-field="name"]`);
+    }
+    if (!a.birthDate){
+      errors.push(`${label}: не указана дата рождения.`);
+      highlightError(`${row} [data-field="birthDate"]`);
+    } else if (!a.ageGroupName){
+      errors.push(`${label}: возраст ${a.age} не попадает ни в одну группу.`);
+      highlightError(`${row} [data-field="birthDate"]`);
+    }
+    if (!a.gender){
+      errors.push(`${label}: не указан пол.`);
+      highlightError(`${row} [data-field="gender"]`);
+    }
   });
 
-  // Хотя бы одно выступление
   let hasEntries = false;
   Object.values(state.individual).forEach(s => { if (s.size>0) hasEntries = true; });
   Object.values(state.groups).forEach(arr => { if (arr.length>0) hasEntries = true; });
   if (!hasEntries) errors.push('Не добавлено ни одного выступления.');
 
-  // Валидность команд
   settings.disciplines.forEach((d, idx) => {
     if (d.type !== 'group') return;
     (state.groups[idx]||[]).forEach((t, ti) => {
       const cnt = t.athleteIds.size;
       if (cnt < d.min || cnt > d.max){
-        errors.push(`«${d.name}» команда ${ti+1}: должно быть ${d.min===d.max?d.min:d.min+'–'+d.max} участников, сейчас ${cnt}.`);
+        errors.push(`«${d.name}» (${genderShort(d.gender)}) команда ${ti+1}: должно быть ${d.min===d.max?d.min:d.min+'–'+d.max}, сейчас ${cnt}.`);
       }
       if (!t.ageGroupName){
-        errors.push(`«${d.name}» команда ${ti+1}: не выбрана возрастная группа.`);
+        errors.push(`«${d.name}» (${genderShort(d.gender)}) команда ${ti+1}: не выбрана возрастная группа.`);
       }
     });
   });
@@ -655,35 +786,33 @@ function validate(){
   return errors;
 }
 
+/* ============================================================================
+   ОТПРАВКА
+   ============================================================================ */
 function buildPayload(){
   const opt = document.getElementById('eventName').selectedOptions[0];
   const entries = [];
 
-  settings.disciplines.forEach(d => {
-    const idx = settings.disciplines.indexOf(d);
+  settings.disciplines.forEach((d, idx) => {
     if (d.type === 'individual'){
       (state.individual[idx] || new Set()).forEach(aid => {
         const a = state.athletes.find(x => x.id === aid);
         if (!a) return;
         entries.push({
-          discipline: d.name,
-          type: 'individual',
-          ageGroup: a.ageGroupName,
-          teamName: '',
-          athletes: [{ name:a.name, birthDate:a.birthDate }]
+          discipline: d.name, type: 'individual', gender: d.gender,
+          ageGroup: a.ageGroupName, teamName: '',
+          athletes: [{ name:a.name, birthDate:a.birthDate, gender:a.gender }]
         });
       });
     } else {
       (state.groups[idx] || []).forEach(t => {
         entries.push({
-          discipline: d.name,
-          type: 'group',
-          ageGroup: t.ageGroupName,
-          teamName: t.name || '',
+          discipline: d.name, type: 'group', gender: d.gender,
+          ageGroup: t.ageGroupName, teamName: t.name || '',
           athletes: [...t.athleteIds]
             .map(aid => state.athletes.find(x => x.id === aid))
             .filter(Boolean)
-            .map(a => ({ name:a.name, birthDate:a.birthDate }))
+            .map(a => ({ name:a.name, birthDate:a.birthDate, gender:a.gender }))
         });
       });
     }
@@ -699,7 +828,8 @@ function buildPayload(){
       email:   document.getElementById('email').value.trim()
     },
     athletes: state.athletes.map(a => ({
-      name: a.name, birthDate: a.birthDate, ageGroup: a.ageGroupName, age: a.age
+      name: a.name, birthDate: a.birthDate, gender: a.gender,
+      ageGroup: a.ageGroupName, age: a.age
     })),
     entries
   };
@@ -707,6 +837,7 @@ function buildPayload(){
 
 async function submitForm(){
   const status = document.getElementById('status');
+  const btn    = document.getElementById('submitBtn');
   status.className = 'status'; status.textContent = '';
 
   const errors = validate();
@@ -726,10 +857,13 @@ async function submitForm(){
     return;
   }
 
+  // Блокируем кнопку, чтобы избежать двойной отправки
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Отправляем…';
+
   try{
     const res = await fetch(SCRIPT_URL, {
-      method:'POST',
-      mode:'cors',
+      method:'POST', mode:'cors',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify(payload)
     });
@@ -739,9 +873,40 @@ async function submitForm(){
     status.className = 'status ok';
     status.textContent = `Заявка отправлена. Номер: ${data.applicationId || '—'}`;
     status.scrollIntoView({behavior:'smooth', block:'center'});
+
+    // Полностью очищаем форму после успешной отправки
+    resetForm(false);
   }catch(err){
     status.className = 'status err';
     status.textContent = 'Не удалось отправить: ' + err.message;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Отправить заявку';
+  }
+}
+
+/* ============================================================================
+   СБРОС ФОРМЫ
+   ============================================================================ */
+function resetForm(askConfirm){
+  if (askConfirm && !confirm('Очистить все введённые данные?')) return;
+
+  ['clubName','city','coachName','coachContact','email'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  state.athletes = [];
+  state.individual = {};
+  state.groups = {};
+  clearErrorHighlights();
+
+  renderRoster();
+  renderDisciplines();
+  renderPreview();
+
+  if (askConfirm){
+    document.getElementById('status').className = 'status';
+    document.getElementById('status').textContent = '';
+    window.scrollTo({top:0, behavior:'smooth'});
   }
 }
 
